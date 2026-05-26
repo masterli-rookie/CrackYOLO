@@ -74,3 +74,12 @@ The custom innovative modules for this project are located in the ultralytics/nn
 Quickly  star : run  Train.py  
 
 Training data you can contact:1971777601@qq.com
+
+
+Dataset
+The dataset used in this project can be downloaded from Baidu Netdisk.
+Link:通过网盘分享的文件：Crack500_YOLO等4个文件
+链接: https://pan.baidu.com/s/14QkZ7sqaURNycEY7Etn0LQ 提取码: stud 
+--来自百度网盘超级会员v4的分享
+
+
