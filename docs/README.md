@@ -1,106 +1,76 @@
-<a href="https://www.ultralytics.com/" target="_blank"><img src="https://raw.githubusercontent.com/ultralytics/assets/main/logo/Ultralytics_Logotype_Original.svg" width="320" alt="Ultralytics logo"></a>
+# Environment Configuration Guide
 
-# 📚 Ultralytics Docs
+> ⚠️ **Important: Do NOT use conda to configure the environment in AutoDL!** The CUDA in the conda environment is a stripped-down version that lacks compilation capabilities, which will cause compilation failures for libraries like Mamba. Please use the system's base environment directly.
 
-Welcome to Ultralytics Docs, your comprehensive resource for understanding and utilizing our state-of-the-art [machine learning](https://www.ultralytics.com/glossary/machine-learning-ml) tools and models, including [Ultralytics YOLO](https://docs.ultralytics.com/models/yolo26). These documents are actively maintained and deployed to [https://docs.ultralytics.com](https://docs.ultralytics.com/) for easy access.
+### 1. Instance Selection
+Select an **NVIDIA RTX 4090** instance in AutoDL and choose the system's pre-installed PyTorch + CUDA base image (no need to install PyTorch manually).
 
-[![pages-build-deployment](https://github.com/ultralytics/docs/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/ultralytics/docs/actions/workflows/pages/pages-build-deployment)
-[![Check Broken links](https://github.com/ultralytics/docs/actions/workflows/links.yml/badge.svg)](https://github.com/ultralytics/docs/actions/workflows/links.yml)
-[![Check Domains](https://github.com/ultralytics/docs/actions/workflows/check_domains.yml/badge.svg)](https://github.com/ultralytics/docs/actions/workflows/check_domains.yml)
-[![Ultralytics Actions](https://github.com/ultralytics/docs/actions/workflows/format.yml/badge.svg)](https://github.com/ultralytics/docs/actions/workflows/format.yml)
+### 2. Preparation: Download `causal_conv1d`
+- Go to [causal-conv1d v1.4.0 Releases](https://github.com/Dao-AILab/causal-conv1d/releases/tag/v1.4.0)
+- Download `causal_conv1d-1.4.0+cu118torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl`
+- Upload the downloaded `.whl` file to the `autodl-tmp/` directory in AutoDL.
 
-<a href="https://discord.com/invite/ultralytics"><img alt="Discord" src="https://img.shields.io/discord/1089800235347353640?logo=discord&logoColor=white&label=Discord&color=blue"></a> <a href="https://community.ultralytics.com/"><img alt="Ultralytics Forums" src="https://img.shields.io/discourse/users?server=https%3A%2F%2Fcommunity.ultralytics.com&logo=discourse&label=Forums&color=blue"></a> <a href="https://www.reddit.com/r/ultralytics/"><img alt="Ultralytics Reddit" src="https://img.shields.io/reddit/subreddit-subscribers/ultralytics?style=flat&logo=reddit&logoColor=white&label=Reddit&color=blue"></a>
-
-## 🛠️ Installation
-
-[![PyPI - Version](https://img.shields.io/pypi/v/ultralytics?logo=pypi&logoColor=white)](https://pypi.org/project/ultralytics/)
-[![Downloads](https://static.pepy.tech/badge/ultralytics)](https://clickpy.clickhouse.com/dashboard/ultralytics)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ultralytics?logo=python&logoColor=gold)](https://pypi.org/project/ultralytics/)
-
-To install the `ultralytics` package in developer mode, which allows you to modify the source code directly, ensure you have [Git](https://git-scm.com/) and [Python](https://www.python.org/) 3.8 or later installed on your system. Then, follow these steps:
-
-1.  Clone the `ultralytics` repository to your local machine using Git:
-
-    ```bash
-    git clone https://github.com/ultralytics/ultralytics.git
-    ```
-
-2.  Navigate to the cloned repository's root directory:
-
-    ```bash
-    cd ultralytics
-    ```
-
-3.  Install the package in editable mode (`-e`) along with its development dependencies (`[dev]`) using [pip](https://pip.pypa.io/en/stable/):
-
-    ```bash
-    pip install -e '.[dev]'
-    ```
-
-    This command installs the `ultralytics` package such that changes to the source code are immediately reflected in your environment, ideal for development.
-
-## 🚀 Building and Serving Locally
-
-### Full Build (Recommended)
-
-The `build_docs.py` script runs the full documentation build pipeline — the same process used for production deployments. It renders Jinja macros, generates API reference pages, pulls in model comparison pages, and applies HTML postprocessing.
+### 3. Install Mamba Core Environment
+Run the following commands sequentially:
 
 ```bash
-# Requires Python >= 3.10
-pip install -e '.[dev]'
+cd autodl-tmp/
+source /etc/network_turbo  # Enable network accelerator
 
-cd docs
-python build_docs.py
-```
+git clone https://github.com/state-spaces/mamba.git
 
-The script builds the site into the `site/` directory and automatically serves it at `http://localhost:8000`. Press `CTRL+C` to stop.
+# Install causal_conv1d
+pip install causal_conv1d-1.4.0+cu118torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 
-### Quick Preview
+# Verify installation
+python -c "import torch; import causal_conv1d; from causal_conv1d import causal_conv1d_fn; print('causal_conv1d version:', causal_conv1d.__version__); print('torch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"
 
-For quick edits to pages that don't use `{% include %}` macros, you can use `zensical serve` for faster iteration with live reloading:
+# Checkout Mamba version and install
+cd mamba
+git checkout v2.2.0
+pip install transformers==4.34.0
+pip install -e . --no-build-isolation
 
-```bash
-zensical serve
-```
+Test Mamba Environment
+import torch
+from mamba_ssm import Mamba
 
-Note that `zensical serve` does **not** render Jinja macros or include compare pages, so some pages (train, predict, val, export, tasks, and others) will display raw `{% include %}` tags instead of their actual content. Use the full build above to verify these pages.
+batch, length, dim = 2, 64, 16
+x = torch.randn(batch, length, dim).to("cuda")
+model = Mamba(
+    d_model=dim, # Model dimension d_model
+    d_state=16,  # SSM state expansion factor
+    d_conv=4,    # Local convolution width
+    expand=2,    # Block expansion factor
+).to("cuda")
+y = model(x)
+assert y.shape == x.shape
+print("Mamba OK, output shape:", y.shape)
 
-## 📤 Deploying Your Documentation Site
+Install Remaining Dependencies
+# Base and compatibility downgrades
+pip install pydantic==1.10.14 "numpy<2" -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-Documentation is automatically built and deployed to [docs.ultralytics.com](https://docs.ultralytics.com) via the CI pipeline in `.github/workflows/docs.yml` on every push to `main`.
+# Deep learning and vision core libraries
+pip install ultralytics tensorboard wandb matplotlib opencv-python optuna -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install "fastapi>=0.100.0" antialiased-cnns torch_dct -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install torchsummary lightning==1.9.5 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-## 💡 Contribute
+# OpenMMLab series
+pip install -U openmim -i https://pypi.tuna.tsinghua.edu.cn/simple
+mim install mmengine -i https://pypi.tuna.tsinghua.edu.cn/simple
+mim install "mmcv>=2.0.0" -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-We deeply value contributions from the open-source community to enhance Ultralytics projects. Your input helps drive innovation! Please review our [Contributing Guide](https://docs.ultralytics.com/help/contributing) for detailed information on how to get involved. You can also share your feedback and ideas through our [Survey](https://www.ultralytics.com/survey?utm_source=github&utm_medium=social&utm_campaign=Survey). A heartfelt thank you 🙏 to all our contributors for their dedication and support!
+# ONNX related
+pip install onnx==1.14.0 onnxruntime==1.15.1 onnxsim==0.4.36 onnxruntime-gpu==1.18.0 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-![Ultralytics open-source contributors](https://raw.githubusercontent.com/ultralytics/assets/main/im/image-contributors.png)
+# Other tools and data processing libraries
+pip install pycocotools==2.0.7 PyYAML==6.0.1 scipy==1.13.0 easydict -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install timm==1.0.7 thop efficientnet_pytorch==0.7.1 einops grad-cam==1.4.8 dill==0.3.6 albumentations==1.4.11 pytorch_wavelets==1.3.0 tidecv PyWavelets -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-We look forward to your contributions!
+Custom Modules
+The custom innovative modules for this project are located in the ultralytics/nn/Addmodules/ directory and can be directly referenced in the YOLO model configuration files 
 
-## 📜 License
+Quickly  star : run  Train.py  
 
-Ultralytics Docs are available under two licensing options to accommodate different usage scenarios:
-
-- **AGPL-3.0 License**: Ideal for students, researchers, and enthusiasts involved in academic pursuits and open collaboration. See the [LICENSE](https://github.com/ultralytics/docs/blob/main/LICENSE) file for full details. This license promotes sharing improvements back with the community.
-- **Enterprise License**: For development and production use, this license enables seamless integration of Ultralytics software and [AI models](https://docs.ultralytics.com/models) into business products and services, including internal tools, automated workflows, and production deployments, bypassing the open-source requirements of AGPL-3.0. To get started, please contact us via [Ultralytics Licensing](https://www.ultralytics.com/license).
-
-## ✉️ Contact
-
-For bug reports, feature requests, and other issues related to the documentation, please use [GitHub Issues](https://github.com/ultralytics/docs/issues). For discussions, questions, and community support, join the conversation with peers and the Ultralytics team on our [Discord server](https://discord.com/invite/ultralytics)!
-
-<br>
-<div align="center">
-  <a href="https://github.com/ultralytics"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-github.png" width="3%" alt="Ultralytics GitHub"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://www.linkedin.com/company/ultralytics/"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-linkedin.png" width="3%" alt="Ultralytics LinkedIn"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://twitter.com/ultralytics"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-twitter.png" width="3%" alt="Ultralytics Twitter"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://www.youtube.com/ultralytics?sub_confirmation=1"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-youtube.png" width="3%" alt="Ultralytics YouTube"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://www.tiktok.com/@ultralytics"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-tiktok.png" width="3%" alt="Ultralytics TikTok"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://ultralytics.com/bilibili"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-bilibili.png" width="3%" alt="Ultralytics BiliBili"></a>
-  <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="3%" alt="space">
-  <a href="https://discord.com/invite/ultralytics"><img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-discord.png" width="3%" alt="Ultralytics Discord"></a>
-</div>
+Training data you can contact:1971777601@qq.com
