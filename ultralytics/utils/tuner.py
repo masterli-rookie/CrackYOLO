@@ -5,7 +5,14 @@ from __future__ import annotations
 import numpy as np
 
 from ultralytics.cfg import TASK2DATA, TASK2METRIC, get_cfg, get_save_dir
-from ultralytics.utils import DEFAULT_CFG, DEFAULT_CFG_DICT, LOGGER, NUM_THREADS, checks, colorstr
+from ultralytics.utils import (
+    DEFAULT_CFG,
+    DEFAULT_CFG_DICT,
+    LOGGER,
+    NUM_THREADS,
+    checks,
+    colorstr,
+)
 
 RAY_SEARCH_ALG_REQUIREMENTS = {
     "random": None,
@@ -131,7 +138,14 @@ def _convert_bohb_search_space(space):
     checks.check_requirements(RAY_SEARCH_ALG_REQUIREMENTS["bohb"])
 
     import ConfigSpace
-    from ray.tune.search.sample import Categorical, Float, Integer, LogUniform, Quantized, Uniform
+    from ray.tune.search.sample import (
+        Categorical,
+        Float,
+        Integer,
+        LogUniform,
+        Quantized,
+        Uniform,
+    )
     from ray.tune.search.variant_generator import parse_spec_vars
     from ray.tune.utils import flatten_dict
 

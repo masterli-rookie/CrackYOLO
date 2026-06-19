@@ -10,7 +10,17 @@ from math import isfinite
 from pathlib import Path
 from time import sleep, time
 
-from ultralytics.utils import ENVIRONMENT, GIT, LOGGER, PYTHON_VERSION, RANK, SETTINGS, TESTS_RUNNING, Retry, colorstr
+from ultralytics.utils import (
+    ENVIRONMENT,
+    GIT,
+    LOGGER,
+    PYTHON_VERSION,
+    RANK,
+    SETTINGS,
+    TESTS_RUNNING,
+    Retry,
+    colorstr,
+)
 
 PREFIX = colorstr("Platform: ")
 
