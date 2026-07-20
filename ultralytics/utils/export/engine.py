@@ -8,7 +8,14 @@ from pathlib import Path
 
 import torch
 
-from ultralytics.utils import IS_JETSON, LOGGER, TORCH_VERSION, ThreadingLocked, is_dgx, is_jetson
+from ultralytics.utils import (
+    IS_JETSON,
+    LOGGER,
+    TORCH_VERSION,
+    ThreadingLocked,
+    is_dgx,
+    is_jetson,
+)
 from ultralytics.utils.checks import check_tensorrt, check_version
 from ultralytics.utils.torch_utils import TORCH_2_4, TORCH_2_9
 
