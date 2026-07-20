@@ -60,7 +60,13 @@ from ultralytics.utils import (
     WEIGHTS_DIR,
     YAML,
 )
-from ultralytics.utils.checks import IS_PYTHON_3_13, check_imgsz, check_requirements, check_yolo, is_rockchip
+from ultralytics.utils.checks import (
+    IS_PYTHON_3_13,
+    check_imgsz,
+    check_requirements,
+    check_yolo,
+    is_rockchip,
+)
 from ultralytics.utils.downloads import safe_download
 from ultralytics.utils.files import file_size
 from ultralytics.utils.torch_utils import get_cpu_info, select_device
