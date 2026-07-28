@@ -10,7 +10,12 @@ import torch
 
 from ultralytics.nn.modules import Detect, Pose, Pose26
 from ultralytics.utils import LINUX, LOGGER, MACOS
-from ultralytics.utils.checks import check_apt_requirements, check_requirements, check_version, is_sudo_available
+from ultralytics.utils.checks import (
+    check_apt_requirements,
+    check_requirements,
+    check_version,
+    is_sudo_available,
+)
 from ultralytics.utils.downloads import attempt_download_asset
 from ultralytics.utils.files import spaces_in_path
 from ultralytics.utils.tal import make_anchors
@@ -181,7 +186,9 @@ def keras2pb(keras_model, output_file: Path | str, prefix: str = "") -> str:
         Creates a frozen graph by converting variables to constants for inference optimization.
     """
     import tensorflow as tf
-    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
+    from tensorflow.python.framework.convert_to_constants import (
+        convert_variables_to_constants_v2,
+    )
 
     LOGGER.info(f"\n{prefix} starting export with tensorflow {tf.__version__}...")
     m = tf.function(lambda x: keras_model(x))  # full model

@@ -10,7 +10,13 @@ import cv2
 import numpy as np
 
 from ultralytics.utils import LOGGER, RANK, SETTINGS, TESTS_RUNNING, ops
-from ultralytics.utils.metrics import ClassifyMetrics, DetMetrics, OBBMetrics, PoseMetrics, SegmentMetrics
+from ultralytics.utils.metrics import (
+    ClassifyMetrics,
+    DetMetrics,
+    OBBMetrics,
+    PoseMetrics,
+    SegmentMetrics,
+)
 
 try:
     assert not TESTS_RUNNING  # do not log pytest
@@ -142,7 +148,7 @@ def _fetch_trainer_metadata(trainer) -> dict:
     save_interval = curr_epoch % save_period == 0
     save_assets = save and save_period > 0 and save_interval and not final_epoch
 
-    return dict(curr_epoch=curr_epoch, curr_step=curr_step, save_assets=save_assets, final_epoch=final_epoch)
+    return {"curr_epoch": curr_epoch, "curr_step": curr_step, "save_assets": save_assets, "final_epoch": final_epoch}
 
 
 def _scale_bounding_box_to_original_image_shape(

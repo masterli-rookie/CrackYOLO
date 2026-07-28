@@ -15,7 +15,15 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from ultralytics.utils import ASSETS_URL, DATASETS_DIR, LOGGER, NUM_THREADS, TQDM, YAML, clean_url
+from ultralytics.utils import (
+    ASSETS_URL,
+    DATASETS_DIR,
+    LOGGER,
+    NUM_THREADS,
+    TQDM,
+    YAML,
+    clean_url,
+)
 from ultralytics.utils.checks import check_file
 from ultralytics.utils.downloads import download, zip_directory
 from ultralytics.utils.files import increment_path
@@ -497,7 +505,7 @@ def convert_dota_to_yolo_obb(dota_root_path: str):
                 formatted_coords = [f"{coord:.6g}" for coord in normalized_coords]
                 g.write(f"{class_idx} {' '.join(formatted_coords)}\n")
 
-    for phase in {"train", "val"}:
+    for phase in ("train", "val"):
         image_dir = dota_root_path / "images" / phase
         orig_label_dir = dota_root_path / "labels" / f"{phase}_original"
         save_dir = dota_root_path / "labels" / phase
@@ -609,7 +617,7 @@ def yolo_bbox2segment(im_dir: str | Path, save_dir: str | Path | None = None, sa
     from ultralytics.utils.ops import xywh2xyxy
 
     # NOTE: add placeholder to pass class index check
-    dataset = YOLODataset(im_dir, data=dict(names=list(range(1000)), channels=3))
+    dataset = YOLODataset(im_dir, data={"names": list(range(1000)), "channels": 3})
     if len(dataset.labels[0]["segments"]) > 0:  # if it's segment data
         LOGGER.info("Segmentation labels detected, no need to generate new ones!")
         return
@@ -679,7 +687,7 @@ def create_synthetic_coco_dataset():
     # Create synthetic images
     shutil.rmtree(dir / "labels" / "test2017", ignore_errors=True)  # Remove test2017 directory as not needed
     with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
-        for subset in {"train2017", "val2017"}:
+        for subset in ("train2017", "val2017"):
             subset_dir = dir / "images" / subset
             subset_dir.mkdir(parents=True, exist_ok=True)
 

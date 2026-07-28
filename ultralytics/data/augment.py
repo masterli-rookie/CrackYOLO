@@ -19,7 +19,11 @@ from ultralytics.utils.checks import check_version
 from ultralytics.utils.instance import Instances
 from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box, xywh2xyxy, xyxyxyxy2xywhr
-from ultralytics.utils.torch_utils import TORCHVISION_0_10, TORCHVISION_0_11, TORCHVISION_0_13
+from ultralytics.utils.torch_utils import (
+    TORCHVISION_0_10,
+    TORCHVISION_0_11,
+    TORCHVISION_0_13,
+)
 
 DEFAULT_MEAN = (0.0, 0.0, 0.0)
 DEFAULT_STD = (1.0, 1.0, 1.0)
@@ -2597,7 +2601,7 @@ class RandomLoadText(BaseTransform):
         neg_samples: tuple[int, int] = (80, 80),
         max_samples: int = 80,
         padding: bool = False,
-        padding_value: list[str] = [""],
+        padding_value: list[str] | None = None,
     ) -> None:
         """Initialize the RandomLoadText class for randomly sampling positive and negative texts.
 
@@ -2614,6 +2618,8 @@ class RandomLoadText(BaseTransform):
                 max_samples.
             padding_value (list[str]): The padding text to use when padding is True.
         """
+        if padding_value is None:
+            padding_value = [""]
         self.prompt_format = prompt_format
         self.neg_samples = neg_samples
         self.max_samples = max_samples

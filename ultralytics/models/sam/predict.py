@@ -98,7 +98,7 @@ class Predictor(BasePredictor):
         """
         if overrides is None:
             overrides = {}
-        overrides.update(dict(task="segment", mode="predict", batch=1))
+        overrides.update({"task": "segment", "mode": "predict", "batch": 1})
         super().__init__(cfg, overrides, _callbacks)
         self.args.retina_masks = True
         self.im = None
@@ -1124,7 +1124,7 @@ class SAM2VideoPredictor(SAM2Predictor):
         # temporary outputs have been added (either in this call or any previous calls
         # to `propagate_in_video_preflight`).
         consolidated_frame_inds = inference_state["consolidated_frame_inds"]
-        for is_cond in {False, True}:
+        for is_cond in (False, True):
             # Separately consolidate conditioning and non-conditioning temp outputs
             storage_key = "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
             # Find all the frames that contain temporary outputs for any objects
@@ -2654,14 +2654,7 @@ class SAM3VideoSemanticPredictor(SAM3SemanticPredictor):
                 names = names or dict(enumerate(str(i) for i in range(pred_boxes[:, 6].int().max() + 1)))
             if pred_masks.shape[0] > 1:
                 tracker_scores = torch.tensor(
-                    [
-                        (
-                            preds["obj_id_to_tracker_score"][obj_id]
-                            if obj_id in preds["obj_id_to_tracker_score"]
-                            else 0.0
-                        )
-                        for obj_id in curr_obj_ids
-                    ],
+                    [(preds["obj_id_to_tracker_score"].get(obj_id, 0.0)) for obj_id in curr_obj_ids],
                     device=pred_masks.device,
                 )[keep]
                 pred_masks = (
@@ -3688,7 +3681,7 @@ class SAM3VideoSemanticPredictor(SAM3SemanticPredictor):
 
         # Step 3: removed tracks that overlaps with another track for `hotstart_dup_thresh` frames
         # a) find overlaps tracks -- we consider overlap if they match to the same detection
-        for _, matched_trk_obj_ids in det_to_matched_trk_obj_ids.items():
+        for matched_trk_obj_ids in det_to_matched_trk_obj_ids.values():
             if len(matched_trk_obj_ids) < 2:
                 continue  # only count detections that are matched to multiple (>=2) masklets
             # if there are multiple matched track ids, we need to find the one that appeared first;

@@ -5,7 +5,11 @@ from typing import Any
 
 import cv2
 
-from ultralytics.solutions.solutions import BaseSolution, SolutionAnnotator, SolutionResults
+from ultralytics.solutions.solutions import (
+    BaseSolution,
+    SolutionAnnotator,
+    SolutionResults,
+)
 from ultralytics.utils.plotting import colors
 
 
@@ -98,7 +102,7 @@ class DistanceCalculation(BaseSolution):
 
             # Update selected boxes if they're being tracked
             if len(self.selected_boxes) == 2:
-                for trk_id in self.selected_boxes.keys():
+                for trk_id in self.selected_boxes:
                     if trk_id == track_id:
                         self.selected_boxes[track_id] = box
 
