@@ -1,16 +1,18 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import math
-from einops import rearrange
 from functools import partial
-from typing import Optional, Callable
-from timm.layers import DropPath
+from typing import Callable
 
-__all__ = ['FMConv', 'C2f_FMConv', 'C3k2_FMConv']
+import torch
+import torch.nn.functional as F
+from einops import rearrange
+from timm.layers import DropPath
+from torch import nn
+
+__all__ = ["C2f_FMConv", "C3k2_FMConv", "FMConv"]
 # ============================================================
 # 1. 基础组件 & 频域增强模块 (优化版)
 # ============================================================
+
 
 class LayerNorm(nn.Module):
     def __init__(self, channels, eps=1e-6):
@@ -22,34 +24,27 @@ class LayerNorm(nn.Module):
 
 
 class AdaptiveSpectralModulation(nn.Module):
-    """
-    [学术优化] 自适应频谱调制模块
-    1. 残差式调制：保证训练稳定性。
-    2. 多尺度频域：捕捉不同粗细的裂纹。
-    3. 空间引导：利用空间特征抑制频域噪声。
-    4. 【新增】Shortcut：保证特征流通，防止梯度消失。
+    """[学术优化] 自适应频谱调制模块 1. 残差式调制：保证训练稳定性。 2. 多尺度频域：捕捉不同粗细的裂纹。 3. 空间引导：利用空间特征抑制频域噪声。 4. 【新增】Shortcut：保证特征流通，防止梯度消失。.
     """
 
-    def __init__(self, in_channels, out_channels, patch_sizes=[4, 16]):
+    def __init__(self, in_channels, out_channels, patch_sizes=None):
+        if patch_sizes is None:
+            patch_sizes = [4, 16]
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.patch_sizes = patch_sizes
 
         # --- 原有参数保持不变 ---
-        self.amp_weights = nn.ParameterList([
-            nn.Parameter(torch.zeros(in_channels, 1, 1, ps, ps // 2 + 1))
-            for ps in patch_sizes
-        ])
-        self.phase_weights = nn.ParameterList([
-            nn.Parameter(torch.zeros(in_channels, 1, 1, ps, ps // 2 + 1))
-            for ps in patch_sizes
-        ])
+        self.amp_weights = nn.ParameterList(
+            [nn.Parameter(torch.zeros(in_channels, 1, 1, ps, ps // 2 + 1)) for ps in patch_sizes]
+        )
+        self.phase_weights = nn.ParameterList(
+            [nn.Parameter(torch.zeros(in_channels, 1, 1, ps, ps // 2 + 1)) for ps in patch_sizes]
+        )
 
         self.scale_attention = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(in_channels, len(patch_sizes), 1),
-            nn.Softmax(dim=1)
+            nn.AdaptiveAvgPool2d(1), nn.Conv2d(in_channels, len(patch_sizes), 1), nn.Softmax(dim=1)
         )
 
         # self.spatial_gate = nn.Sequential(
@@ -65,25 +60,24 @@ class AdaptiveSpectralModulation(nn.Module):
         # 如果输入输出通道不同，需要用 1x1 卷积对齐通道数
         if in_channels != out_channels:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels)
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False), nn.BatchNorm2d(out_channels)
             )
         else:
             self.shortcut = nn.Identity()  # 相同时直接传递
 
     def _process_scale(self, x, ps, amp_w, phase_w):
         # ... (此处保持您原有的 _process_scale 代码完全不变) ...
-        B, C, H, W = x.shape
+        _B, _C, H, W = x.shape
         P = ps
         h_pad = (P - H % P) % P
         w_pad = (P - W % P) % P
         if h_pad > 0 or w_pad > 0:
-            x_pad = F.pad(x, (0, w_pad, 0, h_pad), mode='reflect')
+            x_pad = F.pad(x, (0, w_pad, 0, h_pad), mode="reflect")
         else:
             x_pad = x
-        _, _, H_p, W_p = x_pad.shape
-        x_patch = rearrange(x_pad, 'b c (h p1) (w p2) -> b c h w p1 p2', p1=P, p2=P)
-        x_patch_fft = torch.fft.rfft2(x_patch, norm='ortho')
+        _, _, _H_p, _W_p = x_pad.shape
+        x_patch = rearrange(x_pad, "b c (h p1) (w p2) -> b c h w p1 p2", p1=P, p2=P)
+        x_patch_fft = torch.fft.rfft2(x_patch, norm="ortho")
         mag = torch.abs(x_patch_fft)
         phase = torch.angle(x_patch_fft)
         mag_delta = mag * amp_w
@@ -91,12 +85,12 @@ class AdaptiveSpectralModulation(nn.Module):
         new_mag = mag + mag_delta
         new_phase = phase + phase_delta
         x_patch_fft_mod = torch.polar(new_mag, new_phase)
-        x_patch = torch.fft.irfft2(x_patch_fft_mod, s=(P, P), norm='ortho')
-        x_recon = rearrange(x_patch, 'b c h w p1 p2 -> b c (h p1) (w p2)', p1=P, p2=P)
+        x_patch = torch.fft.irfft2(x_patch_fft_mod, s=(P, P), norm="ortho")
+        x_recon = rearrange(x_patch, "b c h w p1 p2 -> b c (h p1) (w p2)", p1=P, p2=P)
         return x_recon[:, :, :H, :W]
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        B, _C, _H, _W = x.shape
 
         # 1. 保存残差分支 (identity mapping)
         identity = self.shortcut(x)
@@ -148,9 +142,25 @@ except ImportError:
 class SS2D(nn.Module):
     # ... [保持之前的SS2D实现不变，为了节省篇幅此处省略] ...
     # 注意：在实际代码中请完整复制上一版回答中的 SS2D 代码
-    def __init__(self, d_model, d_state=16, d_conv=3, expand=2, dt_rank="auto", dt_min=0.001, dt_max=0.1,
-                 dt_init="random", dt_scale=1.0, dt_init_floor=1e-4, dropout=0., conv_bias=True, bias=False,
-                 device=None, dtype=None, **kwargs):
+    def __init__(
+        self,
+        d_model,
+        d_state=16,
+        d_conv=3,
+        expand=2,
+        dt_rank="auto",
+        dt_min=0.001,
+        dt_max=0.1,
+        dt_init="random",
+        dt_scale=1.0,
+        dt_init_floor=1e-4,
+        dropout=0.0,
+        conv_bias=True,
+        bias=False,
+        device=None,
+        dtype=None,
+        **kwargs,
+    ):
         super().__init__()
         factory_kwargs = {"device": device, "dtype": dtype}
         self.d_model = d_model
@@ -161,24 +171,42 @@ class SS2D(nn.Module):
         self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
 
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=bias, **factory_kwargs)
-        self.conv2d = nn.Conv2d(in_channels=self.d_inner, out_channels=self.d_inner, groups=self.d_inner,
-                                bias=conv_bias, kernel_size=d_conv, padding=(d_conv - 1) // 2, **factory_kwargs)
+        self.conv2d = nn.Conv2d(
+            in_channels=self.d_inner,
+            out_channels=self.d_inner,
+            groups=self.d_inner,
+            bias=conv_bias,
+            kernel_size=d_conv,
+            padding=(d_conv - 1) // 2,
+            **factory_kwargs,
+        )
         self.act = nn.SiLU()
 
         # x_proj 和 dt_projs 定义同前...
-        self.x_proj = (nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
-                       nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
-                       nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
-                       nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs))
+        self.x_proj = (
+            nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
+            nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
+            nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
+            nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs),
+        )
         self.x_proj_weight = nn.Parameter(torch.stack([t.weight for t in self.x_proj], dim=0))
         del self.x_proj
 
         # dt_projs 初始化同前...
         self.dt_projs = (
-        self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs),
-        self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs),
-        self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs),
-        self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs))
+            self.dt_init(
+                self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs
+            ),
+            self.dt_init(
+                self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs
+            ),
+            self.dt_init(
+                self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs
+            ),
+            self.dt_init(
+                self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, **factory_kwargs
+            ),
+        )
         self.dt_projs_weight = nn.Parameter(torch.stack([t.weight for t in self.dt_projs], dim=0))
         self.dt_projs_bias = nn.Parameter(torch.stack([t.bias for t in self.dt_projs], dim=0))
         del self.dt_projs
@@ -189,14 +217,15 @@ class SS2D(nn.Module):
         self.forward_core = self.forward_corev0
         self.out_norm = nn.LayerNorm(self.d_inner)
         self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=bias, **factory_kwargs)
-        self.dropout = nn.Dropout(dropout) if dropout > 0. else None
+        self.dropout = nn.Dropout(dropout) if dropout > 0.0 else None
 
     # 辅助函数 dt_init, A_log_init, D_init 保持不变
     @staticmethod
-    def dt_init(dt_rank, d_inner, dt_scale=1.0, dt_init="random", dt_min=0.001, dt_max=0.1, dt_init_floor=1e-4,
-                **factory_kwargs):
+    def dt_init(
+        dt_rank, d_inner, dt_scale=1.0, dt_init="random", dt_min=0.001, dt_max=0.1, dt_init_floor=1e-4, **factory_kwargs
+    ):
         dt_proj = nn.Linear(dt_rank, d_inner, bias=True, **factory_kwargs)
-        dt_init_std = dt_rank ** -0.5 * dt_scale
+        dt_init_std = dt_rank**-0.5 * dt_scale
         if dt_init == "constant":
             nn.init.constant_(dt_proj.weight, dt_init_std)
         elif dt_init == "random":
@@ -204,8 +233,8 @@ class SS2D(nn.Module):
         else:
             raise NotImplementedError
         dt = torch.exp(
-            torch.rand(d_inner, **factory_kwargs) * (math.log(dt_max) - math.log(dt_min)) + math.log(dt_min)).clamp(
-            min=dt_init_floor)
+            torch.rand(d_inner, **factory_kwargs) * (math.log(dt_max) - math.log(dt_min)) + math.log(dt_min)
+        ).clamp(min=dt_init_floor)
         inv_dt = dt + torch.log(-torch.expm1(-dt))
         with torch.no_grad():
             dt_proj.bias.copy_(inv_dt)
@@ -218,7 +247,8 @@ class SS2D(nn.Module):
         A_log = torch.log(A)
         if copies > 1:
             A_log = A_log.unsqueeze(0).repeat(copies, 1, 1)
-            if merge: A_log = A_log.flatten(0, 1)
+            if merge:
+                A_log = A_log.flatten(0, 1)
         A_log = nn.Parameter(A_log)
         A_log._no_weight_decay = True
         return A_log
@@ -228,19 +258,22 @@ class SS2D(nn.Module):
         D = torch.ones(d_inner, device=device)
         if copies > 1:
             D = D.unsqueeze(0).repeat(copies, 1)
-            if merge: D = D.flatten(0, 1)
+            if merge:
+                D = D.flatten(0, 1)
         D = nn.Parameter(D)
         D._no_weight_decay = True
         return D
 
     def forward_corev0(self, x: torch.Tensor):
-        if not MAMBA_AVAILABLE: raise RuntimeError("mamba_ssm 未安装")
+        if not MAMBA_AVAILABLE:
+            raise RuntimeError("mamba_ssm 未安装")
         self.selective_scan = selective_scan_fn
-        B, C, H, W = x.shape
+        B, _C, H, W = x.shape
         L = H * W
         K = 4
-        x_hwwh = torch.stack([x.view(B, -1, L), torch.transpose(x, dim0=2, dim1=3).contiguous().view(B, -1, L)],
-                             dim=1).view(B, 2, -1, L)
+        x_hwwh = torch.stack(
+            [x.view(B, -1, L), torch.transpose(x, dim0=2, dim1=3).contiguous().view(B, -1, L)], dim=1
+        ).view(B, 2, -1, L)
         xs = torch.cat([x_hwwh, torch.flip(x_hwwh, dims=[-1])], dim=1)  # (b, k, d, l)
 
         x_dbl = torch.einsum("b k d l, k c d -> b k c l", xs.view(B, K, -1, L), self.x_proj_weight)
@@ -256,8 +289,9 @@ class SS2D(nn.Module):
         As = -torch.exp(self.A_logs.float()).view(-1, self.d_state)
         dt_projs_bias = self.dt_projs_bias.float().view(-1)
 
-        out_y = self.selective_scan(xs, dts, As, Bs, Cs, Ds, z=None, delta_bias=dt_projs_bias, delta_softplus=True,
-                                    return_last_state=False).view(B, K, -1, L)
+        out_y = self.selective_scan(
+            xs, dts, As, Bs, Cs, Ds, z=None, delta_bias=dt_projs_bias, delta_softplus=True, return_last_state=False
+        ).view(B, K, -1, L)
         inv_y = torch.flip(out_y[:, 2:4], dims=[-1]).view(B, 2, -1, L)
         wh_y = torch.transpose(out_y[:, 1].view(B, -1, W, H), dim0=2, dim1=3).contiguous().view(B, -1, L)
         invwh_y = torch.transpose(inv_y[:, 1].view(B, -1, W, H), dim0=2, dim1=3).contiguous().view(B, -1, L)
@@ -267,7 +301,7 @@ class SS2D(nn.Module):
         return y
 
     def forward(self, x: torch.Tensor, **kwargs):
-        B, H, W, C = x.shape
+        _B, _H, _W, _C = x.shape
         xz = self.in_proj(x)
         x, z = xz.chunk(2, dim=-1)
         x = x.permute(0, 3, 1, 2).contiguous()
@@ -275,14 +309,21 @@ class SS2D(nn.Module):
         y = self.forward_core(x)
         y = y * F.silu(z)
         out = self.out_proj(y)
-        if self.dropout is not None: out = self.dropout(out)
+        if self.dropout is not None:
+            out = self.dropout(out)
         return out
 
 
 class VSSBlock(nn.Module):
-    def __init__(self, hidden_dim: int = 0, drop_path: float = 0.2,
-                 norm_layer: Callable[..., nn.Module] = partial(nn.LayerNorm, eps=1e-6), attn_drop_rate: float = 0,
-                 d_state: int = 16, **kwargs):
+    def __init__(
+        self,
+        hidden_dim: int = 0,
+        drop_path: float = 0.2,
+        norm_layer: Callable[..., nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+        attn_drop_rate: float = 0,
+        d_state: int = 16,
+        **kwargs,
+    ):
         super().__init__()
         self.ln_1 = norm_layer(hidden_dim)
         self.self_attention = SS2D(d_model=hidden_dim, dropout=attn_drop_rate, d_state=d_state, **kwargs)
@@ -298,14 +339,11 @@ class VSSBlock(nn.Module):
 # 3. 优化后的 PSConv (SFM-PSConv)
 # ============================================================
 
+
 class FMConv(nn.Module):
-    '''
-    [学术优化版] SFM-PSConv (Spatial-Frequency Mamba)
-    针对 Crack Detection 的优化：
-    1. 空间-频域双分支并行结构。
-    2. 频域分支使用多尺度残差调制。
-    3. 引入特征融合门控机制。
-    '''
+    """[学术优化版] SFM-PSConv (Spatial-Frequency Mamba) 针对 Crack Detection 的优化： 1. 空间-频域双分支并行结构。 2. 频域分支使用多尺度残差调制。 3.
+    引入特征融合门控机制。.
+    """
 
     def __init__(self, c1, c2, k=3, s=1, expansion=0.5):
         super().__init__()
@@ -319,10 +357,7 @@ class FMConv(nn.Module):
 
         # 2. 通道投影
         if c1 != c2:
-            self.proj_in = nn.Sequential(
-                nn.Conv2d(c1, c2, kernel_size=1, bias=False),
-                nn.BatchNorm2d(c2)
-            )
+            self.proj_in = nn.Sequential(nn.Conv2d(c1, c2, kernel_size=1, bias=False), nn.BatchNorm2d(c2))
         else:
             self.proj_in = nn.Identity()
 
@@ -336,18 +371,12 @@ class FMConv(nn.Module):
 
         # 4. [新增] 双域融合门控
         # 让网络自己学习如何平衡空间信息和频域信息
-        self.fusion_gate = nn.Sequential(
-            nn.Conv2d(c2 * 2, c2, kernel_size=1),
-            nn.Sigmoid()
-        )
+        self.fusion_gate = nn.Sequential(nn.Conv2d(c2 * 2, c2, kernel_size=1), nn.Sigmoid())
 
         # 5. 残差连接
         self.shortcut = nn.Sequential()
         if c1 != c2 or s != 1:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(c1, c2, 1, s, bias=False),
-                nn.BatchNorm2d(c2)
-            )
+            self.shortcut = nn.Sequential(nn.Conv2d(c1, c2, 1, s, bias=False), nn.BatchNorm2d(c2))
 
     def forward(self, x):
         identity = self.shortcut(x)
@@ -403,8 +432,9 @@ class C3k2_FMConv(nn.Module):
         self.c = int(c2 * e)
         self.cv1 = nn.Conv2d(c1, 2 * self.c, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(2 * self.c)
-        self.cv_shortcut = nn.Sequential(nn.Conv2d(c1, c2, 1, bias=False),
-                                         nn.BatchNorm2d(c2)) if c1 != c2 else nn.Identity()
+        self.cv_shortcut = (
+            nn.Sequential(nn.Conv2d(c1, c2, 1, bias=False), nn.BatchNorm2d(c2)) if c1 != c2 else nn.Identity()
+        )
         total_channels = (2 + n) * self.c
         self.cv2 = nn.Conv2d(total_channels, c2, 1, bias=False)
         self.bn2 = nn.BatchNorm2d(c2)
@@ -422,7 +452,7 @@ class C3k2_FMConv(nn.Module):
 
 if __name__ == "__main__":
     print("=== 优化版 SFM-PSConv 模块测试 ===")
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if not MAMBA_AVAILABLE:
         print("警告: 未检测到 mamba_ssm，跳过测试。")

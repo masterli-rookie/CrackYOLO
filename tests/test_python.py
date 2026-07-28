@@ -86,8 +86,7 @@ def test_predict_txt(tmp_path):
     """Test YOLO predictions with file, directory, and pattern sources listed in a text file."""
     file = tmp_path / "sources_multi_row.txt"
     with open(file, "w") as f:
-        for src in SOURCES_LIST:
-            f.write(f"{src}\n")
+        f.writelines(f"{src}\n" for src in SOURCES_LIST)
     results = YOLO(MODEL)(source=file, imgsz=32)
     assert len(results) == 7, f"Expected 7 results from source list, got {len(results)}"
 
@@ -236,7 +235,7 @@ def test_val(task: str, weight: str, data: str) -> None:
     if IS_RASPBERRYPI and task == "semantic":
         skip_rpi_semantic()
     model = YOLO(weight)
-    for plots in {True, False}:  # Test both cases i.e. plots=True and plots=False
+    for plots in (True, False):  # Test both cases i.e. plots=True and plots=False
         metrics = model.val(data=data, imgsz=32, plots=plots)
         metrics.to_df()
         metrics.to_csv()
@@ -565,7 +564,11 @@ def test_utils_benchmarks():
 def test_utils_torchutils():
     """Test Torch utility functions including profiling and FLOP calculations."""
     from ultralytics.nn.modules.conv import Conv
-    from ultralytics.utils.torch_utils import get_flops_with_torch_profiler, profile_ops, time_sync
+    from ultralytics.utils.torch_utils import (
+        get_flops_with_torch_profiler,
+        profile_ops,
+        time_sync,
+    )
 
     x = torch.randn(1, 64, 20, 20)
     m = Conv(64, 64, k=1, s=2)
@@ -606,7 +609,13 @@ def test_utils_ops():
 
 def test_utils_files(tmp_path):
     """Test file handling utilities including file age, date, and paths with spaces."""
-    from ultralytics.utils.files import file_age, file_date, get_latest_run, increment_path, spaces_in_path
+    from ultralytics.utils.files import (
+        file_age,
+        file_date,
+        get_latest_run,
+        increment_path,
+        spaces_in_path,
+    )
 
     file_age(SOURCE)
     file_date(SOURCE)
@@ -644,7 +653,13 @@ def test_utils_patches_torch_save(tmp_path):
 
 def test_nn_modules_conv():
     """Test Convolutional Neural Network modules including CBAM, Conv2, and ConvTranspose."""
-    from ultralytics.nn.modules.conv import CBAM, Conv2, ConvTranspose, DWConvTranspose2d, Focus
+    from ultralytics.nn.modules.conv import (
+        CBAM,
+        Conv2,
+        ConvTranspose,
+        DWConvTranspose2d,
+        Focus,
+    )
 
     c1, c2 = 8, 16  # input and output channels
     x = torch.zeros(4, c1, 10, 10)  # BCHW
@@ -821,10 +836,10 @@ def test_yoloe(tmp_path):
     from ultralytics.models.yolo.yoloe import YOLOEVPSegPredictor
 
     # visual-prompts
-    visuals = dict(
-        bboxes=np.array([[221.52, 405.8, 344.98, 857.54], [120, 425, 160, 445]]),
-        cls=np.array([0, 1]),
-    )
+    visuals = {
+        "bboxes": np.array([[221.52, 405.8, 344.98, 857.54], [120, 425, 160, 445]]),
+        "cls": np.array([0, 1]),
+    }
     model.predict(
         SOURCE,
         visual_prompts=visuals,
@@ -839,7 +854,10 @@ def test_yoloe(tmp_path):
     model.val(data="coco128-seg.yaml", load_vp=True, imgsz=32)
 
     # Train, fine-tune
-    from ultralytics.models.yolo.yoloe import YOLOEPESegTrainer, YOLOESegTrainerFromScratch
+    from ultralytics.models.yolo.yoloe import (
+        YOLOEPESegTrainer,
+        YOLOESegTrainerFromScratch,
+    )
 
     model = YOLOE("yoloe-11s-seg.pt")
     model.train(
@@ -850,7 +868,7 @@ def test_yoloe(tmp_path):
         imgsz=32,
     )
     # Train, from scratch
-    data_dict = dict(train=dict(yolo_data=["coco128-seg.yaml"]), val=dict(yolo_data=["coco128-seg.yaml"]))
+    data_dict = {"train": {"yolo_data": ["coco128-seg.yaml"]}, "val": {"yolo_data": ["coco128-seg.yaml"]}}
     data_yaml = tmp_path / "yoloe-data.yaml"
     YAML.save(data=data_dict, file=data_yaml)
     for data in [data_dict, data_yaml]:
@@ -904,7 +922,7 @@ def test_grayscale(task: str, model: str, data: str, tmp_path) -> None:
     data["channels"] = 1  # add additional channels key for grayscale
     YAML.save(data=data, file=grayscale_data)
     # remove npy files in train/val splits if exists, might be created by previous tests
-    for split in {"train", "val"}:
+    for split in ("train", "val"):
         for npy_file in (Path(data["path"]) / data[split]).glob("*.npy"):
             npy_file.unlink()
 
